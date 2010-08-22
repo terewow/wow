@@ -18,7 +18,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef QUERYRESULT_H
+#if !defined(QUERYRESULT_H)
 #define QUERYRESULT_H
 
 #include <ace/Refcounted_Auto_Ptr.h>
@@ -27,6 +27,7 @@
 #include "Field.h"
 
 #ifdef _WIN32
+  #define FD_SETSIZE 1024
   #include <winsock2.h>
   #include <mysql.h>
 #else

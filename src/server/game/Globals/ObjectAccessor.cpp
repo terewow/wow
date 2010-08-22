@@ -280,7 +280,7 @@ Corpse* ObjectAccessor::ConvertCorpseForPlayer(uint64 player_guid, bool /*insign
         return NULL;
     }
 
-    sLog.outStaticDebug("Deleting Corpse and spawned bones.");
+    DEBUG_LOG("Deleting Corpse and spawned bones.");
 
     //Map* map = corpse->FindMap();
 
@@ -295,9 +295,7 @@ Corpse* ObjectAccessor::ConvertCorpseForPlayer(uint64 player_guid, bool /*insign
     //    map->Remove(corpse, false);
 
     // remove corpse from DB
-    SQLTransaction trans = WorldDatabase.BeginTransaction();
-    corpse->DeleteFromDB(trans);
-    WorldDatabase.CommitTransaction(trans);
+    corpse->DeleteFromDB();
 
     // we don't want bones to save some cpu.. :)
     delete corpse;

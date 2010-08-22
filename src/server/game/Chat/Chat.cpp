@@ -1222,14 +1222,14 @@ valid examples:
     std::istringstream reader(message);
     char buffer[256];
 
-    uint32 color = 0;
+    uint32 color;
 
-    ItemPrototype const* linkedItem = NULL;
-    Quest const* linkedQuest = NULL;
-    SpellEntry const *linkedSpell = NULL;
-    AchievementEntry const* linkedAchievement = NULL;
-    ItemRandomPropertiesEntry const* itemProperty = NULL;
-    ItemRandomSuffixEntry const* itemSuffix = NULL;
+    ItemPrototype const* linkedItem;
+    Quest const* linkedQuest;
+    SpellEntry const *linkedSpell;
+    AchievementEntry const* linkedAchievement;
+    ItemRandomPropertiesEntry const* itemProperty;
+    ItemRandomSuffixEntry const* itemSuffix;
 
     while (!reader.eof())
     {

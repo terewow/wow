@@ -16,9 +16,9 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "DatabaseEnv.h"
 #include "DatabaseWorkerPool.h"
 #include "MySQLConnection.h"
+#include "DatabaseEnv.h"
 #include "SQLOperation.h"
 
 DatabaseWorkerPool::DatabaseWorkerPool() :
@@ -59,7 +59,7 @@ bool DatabaseWorkerPool::Open(const std::string& infoString, uint8 num_threads)
 
 void DatabaseWorkerPool::Close()
 {
-    sLog.outStaticDebug("Closing down %u connections on this DatabaseWorkerPool", (uint32)m_connections.value());
+    DEBUG_LOG("Closing down %u connections on this DatabaseWorkerPool", (uint32)m_connections.value());
     /// Shuts down worker threads for this connection pool.
     ACE_Thread_Mutex shutdown_Mtx;
     ACE_Condition_Thread_Mutex m_condition(shutdown_Mtx);
@@ -75,14 +75,14 @@ void DatabaseWorkerPool::Close()
     delete m_bundle_conn;
     m_bundle_conn = NULL;
     --m_connections;
-    sLog.outStaticDebug("Closed bundled connection.");
+    DEBUG_LOG("Closed bundled connection.");
 
     //- MySQL::Thread_End() should be called manually from the aborting calling threads
-    sLog.outStaticDebug("Waiting for %u synchroneous database threads to exit.", (uint32)m_connections.value());
+    DEBUG_LOG("Waiting for %u synchroneous database threads to exit.", (uint32)m_connections.value());
     while (!m_sync_connections.empty())
     {
     }
-    sLog.outStaticDebug("Synchroneous database threads exited succesfuly.");
+    DEBUG_LOG("Synchroneous database threads exited succesfuly.");
 
     mysql_library_end();
 }
@@ -182,25 +182,43 @@ QueryResult_AutoPtr DatabaseWorkerPool::PQuery(const char* sql, ...)
     return Query(szQuery);
 }
 
-SQLTransaction DatabaseWorkerPool::BeginTransaction()
+void DatabaseWorkerPool::BeginTransaction()
 {
-    return SQLTransaction(new Transaction);
+    ACE_Guard<ACE_Thread_Mutex> guard(m_transQueues_mtx);
+    ACE_Based::Thread* tranThread = ACE_Based::Thread::current();              // owner of this transaction
+    TransactionQueues::iterator itr = m_tranQueues.find(tranThread);
+    if (itr != m_tranQueues.end() && itr->second != NULL)
+    {
+        itr->second->ForcefulDelete();
+        delete itr->second;
+    }
+    m_tranQueues[tranThread] = new TransactionTask();
+    return;
 }
 
-void DatabaseWorkerPool::CommitTransaction(SQLTransaction transaction)
+void DatabaseWorkerPool::RollbackTransaction()
 {
-    #ifdef _DEBUG
-    if (transaction->GetSize() == 0)
+    ACE_Guard<ACE_Thread_Mutex> guard(m_transQueues_mtx);
+    ACE_Based::Thread* tranThread = ACE_Based::Thread::current();              // owner of this transaction
+    TransactionQueues::iterator itr = m_tranQueues.find(tranThread);
+    if (itr != m_tranQueues.end() && itr->second != NULL)
     {
-        sLog.outError("Transaction contains 0 queries");
-        return;
+        itr->second->ForcefulDelete();
+        delete itr->second;
+        itr->second = NULL;
     }
-    if (transaction->GetSize() == 1)
+}
+
+void DatabaseWorkerPool::CommitTransaction()
+{
+    ACE_Guard<ACE_Thread_Mutex> guard(m_transQueues_mtx);
+    ACE_Based::Thread* tranThread = ACE_Based::Thread::current();              // owner of this transaction
+    TransactionQueues::iterator itr = m_tranQueues.find(tranThread);
+    if (itr != m_tranQueues.end() && itr->second != NULL)
     {
-        sLog.outDetail("Warning: Transaction only holds 1 query, consider removing Transaction context in code.");
+        Enqueue(itr->second);
+        itr->second = NULL;
     }
-    #endif
-    Enqueue(new TransactionTask(transaction));
 }
 
 ACE_Future<QueryResult_AutoPtr> DatabaseWorkerPool::AsyncQuery(const char* sql)

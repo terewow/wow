@@ -22,8 +22,6 @@ project(TrinityCore)
 cmake_minimum_required(VERSION 2.6)
 cmake_policy(SET CMP0005 OLD)
 
-set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
-
 #
 # Force out-of-source build
 #
@@ -42,35 +40,20 @@ endif()
 # Basic packagesearching and setup (further support will be needed, this is a preliminary release!)
 #
 
-include(MacroEnsureVersion)
-include(OptimizeForArchitecture)
-include(AddCompilerFlag)
-include(CheckCXXSourceRuns)
-
 include(CheckIncludeFiles)
-include(FindPlatform)
-
+include(cmake/FindPlatform.cmake)
+include(cmake/FindPCHSupport.cmake)
 if(WIN32)
   set(ACE_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/dep/acelite)
 endif()
-
-find_package(PCHSupport)
-find_package(ACE REQUIRED)
-find_package(MySQL REQUIRED)
-find_package(OpenSSL REQUIRED)
+include(cmake/FindACE.cmake)
+include(cmake/FindMySQL.cmake)
+include(cmake/FindOpenSSL.cmake)
 if( UNIX )
-  find_package(Readline)
-  find_package(ZLIB)
-  find_package(BZip2)
+  include(cmake/FindReadline.cmake)
+  include(FindZLIB)
+  include(FindBZip2)
 endif()
-
-include(cmake/SSETests.cmake)
-
-#
-# Optimize for architecture
-#
-
-OptimizeForArchitecture()
 
 #
 # Select the Release build configuration by default.
@@ -95,8 +78,7 @@ option(COREDEBUG "Build worldserver with additional debug-code included" 0)
 option(SCRIPTPCH "Use precompiled headers when compiling scripts project" 1)
 option(GAMEPCH "Use precompiled headers when compiling game project" 1)
 option(SQL "Copy SQL files during installation" 0)
-option(WARNINGS "Enable all compile-warnings during compile" 1)
-option(USE_SFMT "Use SFMT for random number generation." 0)
+option(WARNINGS "Enable all compile-warnings during compile" 0)
 
 #
 # Search for readline on *nixbased systems (CLI-handler)
@@ -281,17 +263,6 @@ if( SQL )
 else()
   message("* Install SQL-files     : No  (default)")
 endif()
-
-#
-# SFMT...
-#
-if( USE_SFMT )
-  add_definitions(-DUSE_SFMT_FOR_RNG)
-  message("* Use SFMT for RNG      : Yes")
-else()
-  message("* Use SFMT for RNG      : No  (default)")
-endif()
-
 message("")
 
 #####
@@ -319,7 +290,6 @@ if( MSVC )
   endif()
   # Multithreaded compiling on VS
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
-  add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 endif()
 
 #

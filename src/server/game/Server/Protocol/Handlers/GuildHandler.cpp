@@ -887,11 +887,13 @@ void WorldSession::HandleGuildBankDepositMoney(WorldPacket & recv_data)
     if (!pGuild->GetPurchasedTabs())
         return;
 
-    SQLTransaction trans = CharacterDatabase.BeginTransaction();
+    CharacterDatabase.BeginTransaction();
 
-    pGuild->SetBankMoney(pGuild->GetGuildBankMoney()+money, trans);
+    pGuild->SetBankMoney(pGuild->GetGuildBankMoney()+money);
     GetPlayer()->ModifyMoney(-int(money));
-    GetPlayer()->SaveGoldToDB(trans);
+    GetPlayer()->SaveGoldToDB();
+
+    CharacterDatabase.CommitTransaction();
 
     // logging money
     if (_player->GetSession()->GetSecurity() > SEC_PLAYER && sWorld.getConfig(CONFIG_GM_LOG_TRADE))
@@ -901,9 +903,7 @@ void WorldSession::HandleGuildBankDepositMoney(WorldPacket & recv_data)
     }
 
     // log
-    pGuild->LogBankEvent(trans, GUILD_BANK_LOG_DEPOSIT_MONEY, uint8(0), GetPlayer()->GetGUIDLow(), money);
-
-    CharacterDatabase.CommitTransaction(trans);
+    pGuild->LogBankEvent(GUILD_BANK_LOG_DEPOSIT_MONEY, uint8(0), GetPlayer()->GetGUIDLow(), money);
 
     pGuild->DisplayGuildBankTabsInfo(this);
     pGuild->DisplayGuildBankContent(this, 0);
@@ -941,18 +941,21 @@ void WorldSession::HandleGuildBankWithdrawMoney(WorldPacket & recv_data)
     if (!pGuild->HasRankRight(GetPlayer()->GetRank(), GR_RIGHT_WITHDRAW_GOLD))
         return;
 
-    SQLTransaction trans = CharacterDatabase.BeginTransaction();
+    CharacterDatabase.BeginTransaction();
 
-    if (!pGuild->MemberMoneyWithdraw(money, GetPlayer()->GetGUIDLow(), trans))
+    if (!pGuild->MemberMoneyWithdraw(money, GetPlayer()->GetGUIDLow()))
+    {
+        CharacterDatabase.RollbackTransaction();
         return;
+    }
 
     GetPlayer()->ModifyMoney(money);
-    GetPlayer()->SaveGoldToDB(trans);
+    GetPlayer()->SaveGoldToDB();
+
+    CharacterDatabase.CommitTransaction();
 
     // Log
-    pGuild->LogBankEvent(trans, GUILD_BANK_LOG_WITHDRAW_MONEY, uint8(0), GetPlayer()->GetGUIDLow(), money);
-
-    CharacterDatabase.CommitTransaction(trans);
+    pGuild->LogBankEvent(GUILD_BANK_LOG_WITHDRAW_MONEY, uint8(0), GetPlayer()->GetGUIDLow(), money);
 
     pGuild->SendMoneyInfo(this, GetPlayer()->GetGUIDLow());
     pGuild->DisplayGuildBankTabsInfo(this);

@@ -37,7 +37,7 @@
 #include "Map.h"
 #include "ObjectAccessor.h"
 #include "ObjectDefines.h"
-#include <ace/Singleton.h>
+#include "ace/Singleton.h"
 #include "SQLStorage.h"
 #include "Vehicle.h"
 #include "ObjectMgr.h"
@@ -74,26 +74,11 @@ struct GameTele
 
 typedef UNORDERED_MAP<uint32, GameTele > GameTeleMap;
 
-enum ScriptsType
-{
-    SCRIPTS_FIRST = 1,
-
-    SCRIPTS_QUEST_END = SCRIPTS_FIRST,
-    SCRIPTS_QUEST_START,
-    SCRIPTS_SPELL,
-    SCRIPTS_GAMEOBJECT,
-    SCRIPTS_EVENT,
-    SCRIPTS_WAYPOINT,
-    SCRIPTS_GOSSIP,
-
-    SCRIPTS_LAST
-};
-
 struct ScriptInfo
 {
     uint32 id;
     uint32 delay;
-    ScriptCommands command;
+    uint32 command;
     uint32 datalong;
     uint32 datalong2;
     int32  dataint;
@@ -101,9 +86,6 @@ struct ScriptInfo
     float y;
     float z;
     float o;
-    ScriptsType type;
-
-    std::string GetDebugInfo() const;
 };
 
 typedef std::multimap<uint32, ScriptInfo> ScriptMap;
@@ -117,10 +99,6 @@ extern ScriptMapMap sGameObjectScripts;
 extern ScriptMapMap sEventScripts;
 extern ScriptMapMap sGossipScripts;
 extern ScriptMapMap sWaypointScripts;
-
-std::string GetScriptsTableNameByType(ScriptsType type);
-ScriptMapMap* GetScriptsMapByType(ScriptsType type);
-std::string GetScriptCommandName(ScriptCommands command);
 
 struct SpellClickInfo
 {
@@ -1063,8 +1041,8 @@ class ObjectMgr
         int DBCLocaleIndex;
 
     private:
-        void LoadScripts(ScriptsType type);
-        void CheckScripts(ScriptsType type, std::set<int32>& ids);
+        void LoadScripts(ScriptMapMap& scripts, char const* tablename);
+        void CheckScripts(ScriptMapMap const& scripts,std::set<int32>& ids);
         void LoadCreatureAddons(SQLStorage& creatureaddons, char const* entryName, char const* comment);
         void ConvertCreatureAddonAuras(CreatureDataAddon* addon, char const* table, char const* guidEntryStr);
         void LoadQuestRelationsHelper(QuestRelations& map,char const* table);

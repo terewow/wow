@@ -178,8 +178,6 @@ bool Condition::Meets(Player * player, Unit* targetOverride)
         case CONDITION_SOURCE_TYPE_SPELL:
             sendErrorMsg = true;
             break;
-        default:
-            break;
     }
 
     bool refMeets = false;
@@ -467,8 +465,6 @@ void ConditionMgr::LoadConditions(bool isReload)
                     break;
                 case CONDITION_SOURCE_TYPE_GOSSIP_MENU_OPTION:
                     bIsDone = addToGossipMenuItems(cond);
-                    break;
-                default:
                     break;
             }
 
@@ -1215,8 +1211,6 @@ bool ConditionMgr::isConditionTypeValid(Condition* cond)
         }
         case CONDITION_AREAID:
         case CONDITION_INSTANCE_DATA:
-            break;
-        default:
             break;
     }
     return true;

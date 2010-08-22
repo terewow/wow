@@ -10,7 +10,7 @@ DelayExecutor* DelayExecutor::instance()
 }
 
 DelayExecutor::DelayExecutor()
-    : pre_svc_hook_(0), post_svc_hook_(0), activated_(false)
+    : activated_(false), pre_svc_hook_(0), post_svc_hook_(0)
 {
 }
 

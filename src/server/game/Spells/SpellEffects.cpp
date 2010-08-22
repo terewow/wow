@@ -1782,7 +1782,7 @@ void Spell::EffectDummy(uint32 i)
         }
 
         targets.setUnitTarget(unitTarget);
-        Spell* spell = new Spell(m_caster, spellInfo, triggered, m_originalCasterGUID, true);
+        Spell* spell = new Spell(m_caster, spellInfo, triggered, m_originalCasterGUID, NULL, true);
         if (bp) spell->m_currentBasePoints[0] = SpellMgr::CalculateSpellEffectBaseAmount(bp, spellInfo, 0);
         spell->prepare(&targets);
     }
@@ -1966,7 +1966,8 @@ void Spell::EffectTriggerSpell(uint32 effIndex)
             if (unitTarget->ToPlayer()->HasSpellCooldown(spellId))
                 unitTarget->ToPlayer()->RemoveSpellCooldown(spellId);
 
-            triggered_spell_id =  spellId;
+            // Push stealth to list because it must be handled after combat remove
+            m_TriggerSpells.push_back(spellInfo);
             return;
         }
         // Demonic Empowerment -- succubus
@@ -2090,7 +2091,7 @@ void Spell::EffectTriggerMissileSpell(uint32 effect_idx)
     }
 
     if (m_CastItem)
-        sLog.outStaticDebug("WORLD: cast Item spellId - %i", spellInfo->Id);
+        DEBUG_LOG("WORLD: cast Item spellId - %i", spellInfo->Id);
 
     // Remove spell cooldown (not category) if spell triggering spell with cooldown and same category
     // Needed by freezing arrow and few other spells
@@ -6256,7 +6257,7 @@ void Spell::EffectBlock(uint32 /*i*/)
         unitTarget->ToPlayer()->SetCanBlock(true);
 }
 
-void Spell::EffectLeap(uint32 /*i*/)
+void Spell::EffectLeap(uint32 i)
 {
     if (unitTarget->isInFlight())
         return;
@@ -6792,7 +6793,7 @@ void Spell::EffectTransmitted(uint32 effIndex)
     //pGameObj->SetUInt32Value(GAMEOBJECT_LEVEL, m_caster->getLevel());
     pGameObj->SetSpellId(m_spellInfo->Id);
 
-    sLog.outStaticDebug("AddObject at SpellEfects.cpp EffectTransmitted");
+    DEBUG_LOG("AddObject at SpellEfects.cpp EffectTransmitted");
     //m_caster->AddGameObject(pGameObj);
     //m_ObjToDel.push_back(pGameObj);
 
@@ -7456,11 +7457,11 @@ void Spell::EffectBind(uint32 i)
     data << uint32(area_id);
     player->SendDirectMessage( &data );
 
-    sLog.outStaticDebug("New homebind X      : %f", loc.m_positionX);
-    sLog.outStaticDebug("New homebind Y      : %f", loc.m_positionY);
-    sLog.outStaticDebug("New homebind Z      : %f", loc.m_positionZ);
-    sLog.outStaticDebug("New homebind MapId  : %u", loc.m_mapId);
-    sLog.outStaticDebug("New homebind AreaId : %u", area_id);
+    DEBUG_LOG("New homebind X      : %f", loc.m_positionX);
+    DEBUG_LOG("New homebind Y      : %f", loc.m_positionY);
+    DEBUG_LOG("New homebind Z      : %f", loc.m_positionZ);
+    DEBUG_LOG("New homebind MapId  : %u", loc.m_mapId);
+    DEBUG_LOG("New homebind AreaId : %u", area_id);
 
     // zone update
     data.Initialize(SMSG_PLAYERBOUND, 8+4);

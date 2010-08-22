@@ -186,7 +186,7 @@ bool AchievementCriteriaData::IsValid(AchievementCriteriaEntry const* criteria)
             }
             return true;
         case ACHIEVEMENT_CRITERIA_DATA_TYPE_T_LEVEL:
-            if (level.minlevel > STRONG_MAX_LEVEL)
+            if (level.minlevel < 0 || level.minlevel > STRONG_MAX_LEVEL)
             {
                 sLog.outErrorDb("Table `achievement_criteria_data` (Entry: %u Type: %u) for data type ACHIEVEMENT_CRITERIA_DATA_TYPE_T_LEVEL (%u) has wrong minlevel in value1 (%u), ignored.",
                     criteria->ID, criteria->requiredType,dataType,level.minlevel);
@@ -440,10 +440,10 @@ void AchievementMgr::ResetAchievementCriteria(AchievementCriteriaTypes type, uin
 
 void AchievementMgr::DeleteFromDB(uint32 lowguid)
 {
-    SQLTransaction trans = CharacterDatabase.BeginTransaction();
-    trans->PAppend("DELETE FROM character_achievement WHERE guid = %u",lowguid);
-    trans->PAppend("DELETE FROM character_achievement_progress WHERE guid = %u",lowguid);
-    CharacterDatabase.CommitTransaction(trans);
+    CharacterDatabase.BeginTransaction ();
+    CharacterDatabase.PExecute("DELETE FROM character_achievement WHERE guid = %u",lowguid);
+    CharacterDatabase.PExecute("DELETE FROM character_achievement_progress WHERE guid = %u",lowguid);
+    CharacterDatabase.CommitTransaction ();
 }
 
 void AchievementMgr::DeleteAchievementFromDB(uint32 lowguid, uint32 achi_id)
@@ -454,7 +454,7 @@ void AchievementMgr::DeleteAchievementFromDB(uint32 lowguid, uint32 achi_id)
     SaveToDB();
 }
 
-void AchievementMgr::SaveToDB(SQLTransaction& trans)
+void AchievementMgr::SaveToDB()
 {
     if (!m_completedAchievements.empty())
     {
@@ -493,8 +493,8 @@ void AchievementMgr::SaveToDB(SQLTransaction& trans)
 
         if (need_execute)
         {
-            trans->Append(ssdel.str().c_str());
-            trans->Append(ssins.str().c_str());
+            CharacterDatabase.Execute(ssdel.str().c_str());
+            CharacterDatabase.Execute(ssins.str().c_str());
         }
     }
 
@@ -553,9 +553,9 @@ void AchievementMgr::SaveToDB(SQLTransaction& trans)
         if (need_execute_del || need_execute_ins)
         {
             if (need_execute_del)
-                trans->Append(ssdel.str().c_str());
+                CharacterDatabase.Execute(ssdel.str().c_str());
             if (need_execute_ins)
-                trans->Append(ssins.str().c_str());
+                CharacterDatabase.Execute(ssins.str().c_str());
         }
     }
 }
@@ -1961,18 +1961,16 @@ void AchievementMgr::CompletedAchievement(AchievementEntry const* achievement)
 
         MailDraft draft(subject, text);
 
-        SQLTransaction trans = CharacterDatabase.BeginTransaction();
         if (item)
         {
             // save new item before send
-            item->SaveToDB(trans);                               // save for prevent lost at next mail load, if send fail then item will deleted
+            item->SaveToDB();                               // save for prevent lost at next mail load, if send fail then item will deleted
 
             // item
             draft.AddItem(item);
         }
 
-        draft.SendMailTo(trans, GetPlayer(), MailSender(MAIL_CREATURE, reward->sender));
-        CharacterDatabase.CommitTransaction(trans);
+        draft.SendMailTo(GetPlayer(), MailSender(MAIL_CREATURE, reward->sender));
     }
 }
 

@@ -27,6 +27,8 @@
 #include "Util.h"
 #include "SHA1.h"
 
+extern DatabaseType LoginDatabase;
+
 AccountMgr::AccountMgr()
 {}
 
@@ -84,13 +86,13 @@ AccountOpResult AccountMgr::DeleteAccount(uint32 accid)
     CharacterDatabase.PExecute("DELETE FROM character_tutorial WHERE account = '%u'",accid);
     CharacterDatabase.PExecute("DELETE FROM account_data WHERE account = '%u'",accid);
 
-    SQLTransaction trans = LoginDatabase.BeginTransaction();
+    LoginDatabase.BeginTransaction();
 
-    trans->PAppend("DELETE FROM account WHERE id='%d'", accid);
-    trans->PAppend("DELETE FROM account_access WHERE id ='%d'", accid);
-    trans->PAppend("DELETE FROM realmcharacters WHERE acctid='%d'", accid);
+    LoginDatabase.PExecute("DELETE FROM account WHERE id='%d'", accid);
+    LoginDatabase.PExecute("DELETE FROM account_access WHERE id ='%d'", accid);
+    LoginDatabase.PExecute("DELETE FROM realmcharacters WHERE acctid='%d'", accid);
 
-    LoginDatabase.CommitTransaction(trans);
+    LoginDatabase.CommitTransaction();
 
     return AOR_OK;
 }

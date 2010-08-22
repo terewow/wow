@@ -116,19 +116,20 @@ bool Group::Create(const uint64 &guid, const char * name)
 
         Player::ConvertInstancesToGroup(leader, this, guid);
 
-        if (!AddMember(guid, name))
-            return false;
-
         // store group in database
-        SQLTransaction trans = CharacterDatabase.BeginTransaction();
-        trans->PAppend("DELETE FROM groups WHERE guid ='%u'", lowguid);
-        trans->PAppend("DELETE FROM group_member WHERE guid ='%u'", lowguid);
-        trans->PAppend("INSERT INTO groups (guid,leaderGuid,lootMethod,looterGuid,lootThreshold,icon1,icon2,icon3,icon4,icon5,icon6,icon7,icon8,groupType,difficulty,raiddifficulty) "
+        CharacterDatabase.BeginTransaction();
+        CharacterDatabase.PExecute("DELETE FROM groups WHERE guid ='%u'", lowguid);
+        CharacterDatabase.PExecute("DELETE FROM group_member WHERE guid ='%u'", lowguid);
+        CharacterDatabase.PExecute("INSERT INTO groups (guid,leaderGuid,lootMethod,looterGuid,lootThreshold,icon1,icon2,icon3,icon4,icon5,icon6,icon7,icon8,groupType,difficulty,raiddifficulty) "
             "VALUES ('%u','%u','%u','%u','%u','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','" UI64FMTD "','%u','%u','%u')",
             lowguid, GUID_LOPART(m_leaderGuid), uint32(m_lootMethod),
             GUID_LOPART(m_looterGuid), uint32(m_lootThreshold), m_targetIcons[0], m_targetIcons[1], m_targetIcons[2], m_targetIcons[3], m_targetIcons[4], m_targetIcons[5], m_targetIcons[6], m_targetIcons[7], uint8(m_groupType), uint32(m_dungeonDifficulty), m_raidDifficulty);
-        
-        CharacterDatabase.CommitTransaction(trans);
+        if (!AddMember(guid, name))
+        {
+            CharacterDatabase.RollbackTransaction();
+            return false;
+        }
+        CharacterDatabase.CommitTransaction();
     }
     else if (!AddMember(guid, name))
         return false;
@@ -496,10 +497,10 @@ void Group::Disband(bool hideDestroy)
     if (!isBGGroup())
     {
         uint32 lowguid = GUID_LOPART(m_guid);
-        SQLTransaction trans = CharacterDatabase.BeginTransaction();
-        trans->PAppend("DELETE FROM groups WHERE guid=%u", lowguid);
-        trans->PAppend("DELETE FROM group_member WHERE guid=%u", lowguid);
-        CharacterDatabase.CommitTransaction(trans);
+        CharacterDatabase.BeginTransaction();
+        CharacterDatabase.PExecute("DELETE FROM groups WHERE guid=%u", lowguid);
+        CharacterDatabase.PExecute("DELETE FROM group_member WHERE guid=%u", lowguid);
+        CharacterDatabase.CommitTransaction();
         ResetInstances(INSTANCE_RESET_GROUP_DISBAND, false, NULL);
         ResetInstances(INSTANCE_RESET_GROUP_DISBAND, true, NULL);
     }
@@ -1333,14 +1334,14 @@ void Group::_setLeader(const uint64 &guid)
     if (!isBGGroup())
     {
         // TODO: set a time limit to have this function run rarely cause it can be slow
-        SQLTransaction trans = CharacterDatabase.BeginTransaction();
+        CharacterDatabase.BeginTransaction();
 
         // update the group's bound instances when changing leaders
 
         // remove all permanent binds from the group
         // in the DB also remove solo binds that will be replaced with permbinds
         // from the new leader
-        trans->PAppend(
+        CharacterDatabase.PExecute(
             "DELETE FROM group_instance WHERE guid=%u AND (permanent = 1 OR "
             "instance IN (SELECT instance FROM character_instance WHERE guid = '%u')"
             ")", GUID_LOPART(m_guid), GUID_LOPART(slot->guid)
@@ -1370,8 +1371,8 @@ void Group::_setLeader(const uint64 &guid)
         Player::ConvertInstancesToGroup(player, this, slot->guid);
 
         // update the group leader
-        trans->PAppend("UPDATE groups SET leaderGuid='%u' WHERE guid='%u'", GUID_LOPART(slot->guid), GUID_LOPART(m_guid));
-        CharacterDatabase.CommitTransaction(trans);
+        CharacterDatabase.PExecute("UPDATE groups SET leaderGuid='%u' WHERE guid='%u'", GUID_LOPART(slot->guid), GUID_LOPART(m_guid));
+        CharacterDatabase.CommitTransaction();
     }
 
     m_leaderGuid = slot->guid;
@@ -1871,7 +1872,7 @@ void Group::BroadcastGroupUpdate(void)
         {
             pp->ForceValuesUpdateAtIndex(UNIT_FIELD_BYTES_2);
             pp->ForceValuesUpdateAtIndex(UNIT_FIELD_FACTIONTEMPLATE);
-            sLog.outStaticDebug("-- Forced group value update for '%s'", pp->GetName());
+            DEBUG_LOG("-- Forced group value update for '%s'", pp->GetName());
         }
     }
 }

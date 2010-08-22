@@ -863,12 +863,7 @@ void WorldSession::HandleRepairItemOpcode(WorldPacket & recv_data)
         Guild *pGuild = sObjectMgr.GetGuildById(GuildId);
         if (!pGuild)
             return;
-
-        //- TODO: Fix poor function call design
-        SQLTransaction trans = CharacterDatabase.BeginTransaction();
-        pGuild->LogBankEvent(trans, GUILD_BANK_LOG_REPAIR_MONEY, 0, _player->GetGUIDLow(), TotalCost);
-        CharacterDatabase.CommitTransaction(trans);
-
+        pGuild->LogBankEvent(GUILD_BANK_LOG_REPAIR_MONEY, 0, _player->GetGUIDLow(), TotalCost);
         pGuild->SendMoneyInfo(this, _player->GetGUIDLow());
     }
 }

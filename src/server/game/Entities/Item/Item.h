@@ -244,10 +244,10 @@ class Item : public Object
         bool IsBoundAccountWide() const { return (GetProto()->Flags & ITEM_PROTO_FLAG_BIND_TO_ACCOUNT) != 0; }
         bool IsBindedNotWith(Player const* player) const;
         bool IsBoundByEnchant() const;
-        virtual void SaveToDB(SQLTransaction& trans);
+        virtual void SaveToDB();
         virtual bool LoadFromDB(uint32 guid, uint64 owner_guid, QueryResult_AutoPtr result, uint32 entry);
-        virtual void DeleteFromDB(SQLTransaction& trans);
-        void DeleteFromInventoryDB(SQLTransaction& trans);
+        virtual void DeleteFromDB();
+        void DeleteFromInventoryDB();
         void SaveRefundDataToDB();
         void DeleteRefundDataFromDB();
 

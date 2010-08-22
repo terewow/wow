@@ -20,6 +20,7 @@ SDName: Boss_Onyxia
 SD%Complete: 95
 SDComment: <Known bugs>
                Ground visual for Deep Breath effect;
+               Wing Buffet not ignoring armor;
                Not summoning whelps on phase 3 (lacks info)
            </Known bugs>
 SDCategory: Onyxia's Lair
@@ -89,8 +90,6 @@ static sOnyxMove aMoveData[]=
 
 const Position MiddleRoomLocation = {-23.6155, -215.357, -55.7344};
 
-const Position Phase2Location = {-80.924, -214.299, -82.942};
-
 static Position aSpawnLocations[3]=
 {
     //Whelps
@@ -140,6 +139,7 @@ public:
         uint32 m_uiBellowingRoarTimer;
 
         uint8 m_uiSummonWhelpCount;
+        uint8 m_uiSummonLairGuardCount;
         bool m_bIsMoving;
 
         void Reset()
@@ -155,18 +155,19 @@ public:
             m_uiWingBuffetTimer = urand(10000, 20000);
 
             m_uiMovePoint = urand(0, 5);
-            m_uiMovementTimer = 14000;
+            m_uiMovementTimer = 20000;
             m_pPointData = GetMoveData();
 
             m_uiFireballTimer = 15000;
-            m_uiWhelpTimer = 60000;
-            m_uiLairGuardTimer = 60000;
+            m_uiWhelpTimer = 1000;
+            m_uiLairGuardTimer = 15000;
             m_uiDeepBreathTimer = 85000;
 
             m_uiBellowingRoarTimer = 30000;
 
             Summons.DespawnAll();
             m_uiSummonWhelpCount = 0;
+            m_uiSummonLairGuardCount = 0;
             m_bIsMoving = false;
 
             if (m_pInstance)
@@ -186,6 +187,7 @@ public:
             {
                 m_pInstance->SetData(DATA_ONYXIA, IN_PROGRESS);
                 m_pInstance->DoStartTimedAchievement(ACHIEVEMENT_TIMED_TYPE_EVENT,  ACHIEV_TIMED_START_EVENT);
+                sLog.outBasic("[Onyxia] DoStartTimedAchievement(%u,%u)",ACHIEVEMENT_TIMED_TYPE_EVENT,  ACHIEV_TIMED_START_EVENT);
             }
         }
 
@@ -210,6 +212,7 @@ public:
                     break;
                 case NPC_LAIRGUARD:
                     pSummoned->setActive(true);
+                    ++m_uiSummonLairGuardCount;
                     break;
             }
             Summons.Summon(pSummoned);
@@ -260,24 +263,6 @@ public:
                         me->GetMotionMaster()->MoveChase(me->getVictim());
                         m_uiBellowingRoarTimer = 1000;
                         break;
-    				case 10:
-    					me->SetFlying(true);
-                        me->GetMotionMaster()->MovePoint(11, Phase2Location.GetPositionX(),Phase2Location.GetPositionY(),Phase2Location.GetPositionZ()+25);
-    					me->SetSpeed(MOVE_FLIGHT, 1.0f);
-                        DoScriptText(SAY_PHASE_2_TRANS, me);
-                        if (m_pInstance)
-                            m_pInstance->SetData(DATA_ONYXIA_PHASE, m_uiPhase);
-                        m_uiWhelpTimer = 5000;
-                        m_uiLairGuardTimer = 15000;
-    					break;
-    				case 11:
-                        if (m_pPointData)
-                            me->GetMotionMaster()->MovePoint(m_pPointData->uiLocId, m_pPointData->fX, m_pPointData->fY, m_pPointData->fZ);
-    					me->GetMotionMaster()->Clear(false);
-                        me->GetMotionMaster()->MoveIdle();
-    
-    					break;
-
                     default:
                         m_bIsMoving = false;
                         break;
@@ -346,9 +331,22 @@ public:
                 {
                     if (me->GetHealth()*100 / me->GetMaxHealth() < 60)
                     {
-                        SetCombatMovement(false);
                         m_uiPhase = PHASE_BREATH;
-                        me->GetMotionMaster()->MovePoint(10, Phase2Location);
+
+                        if (m_pInstance)
+                            m_pInstance->SetData(DATA_ONYXIA_PHASE, m_uiPhase);
+
+                        SetCombatMovement(false);
+                        me->GetMotionMaster()->Clear(false);
+                        me->GetMotionMaster()->MoveIdle();
+                        me->SetFlying(true);
+
+                        DoScriptText(SAY_PHASE_2_TRANS, me);
+
+                        if (m_pPointData)
+                            me->GetMotionMaster()->MovePoint(m_pPointData->uiLocId, m_pPointData->fX, m_pPointData->fY, m_pPointData->fZ);
+
+                        m_uiWhelpTimer = 1000;
                         return;
                     }
                 }
@@ -469,7 +467,13 @@ public:
                 if (m_uiLairGuardTimer <= uiDiff)
                 {
                     me->SummonCreature(NPC_LAIRGUARD, aSpawnLocations[2].GetPositionX(), aSpawnLocations[2].GetPositionY(), aSpawnLocations[2].GetPositionZ(), 0.0f, TEMPSUMMON_CORPSE_DESPAWN);
-                    m_uiLairGuardTimer = 30000;
+                    if (m_uiSummonLairGuardCount >= RAID_MODE(1,2))
+                    {
+                        m_uiSummonLairGuardCount = 0;
+                        m_uiLairGuardTimer = 30000;
+                    }
+                    else
+                        m_uiLairGuardTimer = 2000;
                 }
                 else
                     m_uiLairGuardTimer -= uiDiff;

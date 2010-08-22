@@ -599,8 +599,6 @@ bool BossAI::CheckBoundary(Unit *who)
                 if (me->GetPositionX() - me->GetPositionY() < itr->second)
                     return false;
                 break;
-            default:
-                break;
         }
     }
 

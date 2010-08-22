@@ -415,7 +415,7 @@ class Spell
 
         typedef std::set<Aura *> UsedSpellMods;
 
-        Spell(Unit* Caster, SpellEntry const *info, bool triggered, uint64 originalCasterGUID = 0, bool skipCheck = false);
+        Spell(Unit* Caster, SpellEntry const *info, bool triggered, uint64 originalCasterGUID = 0, Spell** triggeringContainer = NULL, bool skipCheck = false);
         ~Spell();
 
         void prepare(SpellCastTargets const* targets, AuraEffect const * triggeredByAura = NULL);
@@ -429,6 +429,7 @@ class Spell
         void TakeRunePower();
         void TakeReagents();
         void TakeCastItem();
+        void TriggerSpell();
 
         SpellCastResult CheckCast(bool strict);
         SpellCastResult CheckPetCast(Unit* target);
@@ -529,6 +530,8 @@ class Spell
         void UpdatePointers();                              // must be used at call Spell code after time delay (non triggered spell cast/update spell call/etc)
 
         bool CheckTargetCreatureType(Unit* target) const;
+
+        void AddTriggeredSpell(SpellEntry const* spell) { m_TriggerSpells.push_back(spell); }
 
         void CleanupTargetList();
 
@@ -669,11 +672,7 @@ class Spell
 
         // Scripting system
         void LoadScripts();
-        void PrepareScriptHitHandlers();
-        bool CallScriptEffectHandlers(SpellEffIndex effIndex);
-        void CallScriptBeforeHitHandlers();
-        void CallScriptOnHitHandlers();
-        void CallScriptAfterHitHandlers();
+        void PrepareTargetHitForScripts();
         std::list<SpellScript *> m_loadedScripts;
 
         // effect helpers
@@ -685,6 +684,8 @@ class Spell
         // -------------------------------------------
 
         //List For Triggered Spells
+        typedef std::vector<SpellEntry const*> TriggerSpells;
+        TriggerSpells m_TriggerSpells;
         typedef std::vector< std::pair<SpellEntry const*, int32> > ChanceTriggerSpells;
         ChanceTriggerSpells m_ChanceTriggerSpells;
 
@@ -726,8 +727,8 @@ namespace Trinity
 
         SpellNotifierCreatureAndPlayer(Unit *source, std::list<Unit*> &data, float radius, SpellNotifyPushType type,
             SpellTargets TargetType = SPELL_TARGETS_ENEMY, const Position *pos = NULL, uint32 entry = 0)
-            : i_data(&data), i_push_type(type), i_radius(radius), i_TargetType(TargetType),
-            i_source(source), i_entry(entry), i_pos(pos)
+            : i_source(source), i_data(&data), i_radius(radius), i_push_type(type)
+            , i_TargetType(TargetType), i_pos(pos), i_entry(entry)
         {
             ASSERT(i_source);
         }

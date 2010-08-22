@@ -28,7 +28,6 @@
 #include "QueryResult.h"
 #include "Callback.h"
 #include "MySQLConnection.h"
-#include "Transaction.h"
 
 enum MySQLThreadBundle
 {
@@ -74,8 +73,9 @@ class DatabaseWorkerPool
         ACE_Future<QueryResult_AutoPtr> AsyncPQuery(const char* sql, ...);
         QueryResultHolderFuture DelayQueryHolder(SQLQueryHolder* holder);
         
-        SQLTransaction BeginTransaction();
-        void CommitTransaction(SQLTransaction transaction);
+        void BeginTransaction();
+        void RollbackTransaction();
+        void CommitTransaction();
 
         void escape_string(std::string& str)
         {
@@ -117,6 +117,8 @@ class DatabaseWorkerPool
         MySQLConnection*                m_bundle_conn;       //! Bundled connection (see Database.ThreadBundleMask config)
         AtomicUInt                      m_connections;       //! Counter of MySQL connections; 
         std::string                     m_infoString;        //! Infostring that is passed on to child connections.
+        TransactionQueues               m_tranQueues;        //! Transaction queues from diff. threads
+        ACE_Thread_Mutex                m_transQueues_mtx;   //! To guard m_transQueues
 };
 
 #endif

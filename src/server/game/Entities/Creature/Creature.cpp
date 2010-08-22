@@ -138,14 +138,16 @@ bool ForcedDespawnDelayEvent::Execute(uint64 /*e_time*/, uint32 /*p_time*/)
     return true;
 }
 
-Creature::Creature(): Unit(),
+Creature::Creature() :
+Unit(),
 lootForPickPocketed(false), lootForBody(false), m_groupLootTimer(0), lootingGroupLowGUID(0),
-m_PlayerDamageReq(0), m_lootMoney(0), m_lootRecipient(0), m_deathTimer(0), m_respawnTime(0),
-m_respawnDelay(300), m_corpseDelay(60), m_respawnradius(0.0f), m_reactState(REACT_AGGRESSIVE),
+m_lootMoney(0), m_lootRecipient(0),
+m_deathTimer(0), m_respawnTime(0), m_respawnDelay(300), m_corpseDelay(60), m_respawnradius(0.0f),
 m_defaultMovementType(IDLE_MOTION_TYPE), m_DBTableGuid(0), m_equipmentId(0), m_AlreadyCallAssistance(false),
-m_AlreadySearchedAssistance(false), m_regenHealth(true), m_AI_locked(false), m_isDeadByDefault(false),
-m_meleeDamageSchoolMask(SPELL_SCHOOL_MASK_NORMAL), m_creatureInfo(NULL), m_creatureData(NULL), 
-m_formation(NULL)
+m_regenHealth(true), m_AI_locked(false), m_isDeadByDefault(false), m_meleeDamageSchoolMask(SPELL_SCHOOL_MASK_NORMAL),
+m_creatureInfo(NULL), m_reactState(REACT_AGGRESSIVE), m_formation(NULL)
+, m_AlreadySearchedAssistance(false)
+, m_creatureData(NULL), m_PlayerDamageReq(0)
 {
     m_regenTimer = CREATURE_REGEN_INTERVAL;
     m_valuesCount = UNIT_END;
@@ -488,7 +490,7 @@ void Creature::Update(uint32 diff)
             else if (m_deathTimer <= diff)
             {
                 RemoveCorpse();
-                sLog.outStaticDebug("Removing corpse... %u ", GetUInt32Value(OBJECT_FIELD_ENTRY));
+                DEBUG_LOG("Removing corpse... %u ", GetUInt32Value(OBJECT_FIELD_ENTRY));
             }
             else
             {
@@ -506,7 +508,7 @@ void Creature::Update(uint32 diff)
                 if (m_deathTimer <= diff)
                 {
                     RemoveCorpse();
-                    sLog.outStaticDebug("Removing alive corpse... %u ", GetUInt32Value(OBJECT_FIELD_ENTRY));
+                    DEBUG_LOG("Removing alive corpse... %u ", GetUInt32Value(OBJECT_FIELD_ENTRY));
                 }
                 else
                 {
@@ -1050,9 +1052,9 @@ void Creature::SaveToDB(uint32 mapid, uint8 spawnMask, uint32 phaseMask)
     data.spawnMask = spawnMask;
 
     // updated in DB
-    SQLTransaction trans = WorldDatabase.BeginTransaction();
+    WorldDatabase.BeginTransaction();
 
-    trans->PAppend("DELETE FROM creature WHERE guid = '%u'", m_DBTableGuid);
+    WorldDatabase.PExecute("DELETE FROM creature WHERE guid = '%u'", m_DBTableGuid);
 
     std::ostringstream ss;
     ss << "INSERT INTO creature VALUES ("
@@ -1075,9 +1077,9 @@ void Creature::SaveToDB(uint32 mapid, uint8 spawnMask, uint32 phaseMask)
         << (m_isDeadByDefault ? 1 : 0) << ","               //is_dead
         << GetDefaultMovementType() << ")";                 //default movement generator type
 
-    trans->Append(ss.str().c_str());
+    WorldDatabase.PExecute(ss.str().c_str());
 
-    WorldDatabase.CommitTransaction(trans);
+    WorldDatabase.CommitTransaction();
 }
 
 void Creature::SelectLevel(const CreatureInfo *cinfo)
@@ -1346,12 +1348,12 @@ void Creature::DeleteFromDB()
     sObjectMgr.SaveCreatureRespawnTime(m_DBTableGuid,GetInstanceId(),0);
     sObjectMgr.DeleteCreatureData(m_DBTableGuid);
 
-    SQLTransaction trans = WorldDatabase.BeginTransaction();
-    trans->PAppend("DELETE FROM creature WHERE guid = '%u'", m_DBTableGuid);
-    trans->PAppend("DELETE FROM creature_addon WHERE guid = '%u'", m_DBTableGuid);
-    trans->PAppend("DELETE FROM game_event_creature WHERE guid = '%u'", m_DBTableGuid);
-    trans->PAppend("DELETE FROM game_event_model_equip WHERE guid = '%u'", m_DBTableGuid);
-    WorldDatabase.CommitTransaction(trans);
+    WorldDatabase.BeginTransaction();
+    WorldDatabase.PExecute("DELETE FROM creature WHERE guid = '%u'", m_DBTableGuid);
+    WorldDatabase.PExecute("DELETE FROM creature_addon WHERE guid = '%u'", m_DBTableGuid);
+    WorldDatabase.PExecute("DELETE FROM game_event_creature WHERE guid = '%u'", m_DBTableGuid);
+    WorldDatabase.PExecute("DELETE FROM game_event_model_equip WHERE guid = '%u'", m_DBTableGuid);
+    WorldDatabase.CommitTransaction();
 }
 
 bool Creature::canSeeOrDetect(Unit const* u, bool detect, bool /*inVisibleList*/, bool /*is3dDistance*/) const
@@ -1569,7 +1571,7 @@ void Creature::Respawn(bool force)
         if (m_DBTableGuid)
             sObjectMgr.SaveCreatureRespawnTime(m_DBTableGuid,GetInstanceId(),0);
 
-        sLog.outStaticDebug("Respawning...");
+        DEBUG_LOG("Respawning...");
         m_respawnTime = 0;
         lootForPickPocketed = false;
         lootForBody         = false;
@@ -2146,7 +2148,6 @@ void Creature::SetInCombatWithZone()
 
             if (pPlayer->isAlive())
             {
-                this->SetInCombatWith(pPlayer);
                 pPlayer->SetInCombatWith(this);
                 AddThreat(pPlayer, 0.0f);
             }

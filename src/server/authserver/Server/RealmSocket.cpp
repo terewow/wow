@@ -43,8 +43,8 @@ RealmSocket::Session::~Session(void)
 }
 
 RealmSocket::RealmSocket(void):
-    input_buffer_(4096),
     session_(NULL),
+    input_buffer_(4096),
     remote_address_()
 {
     reference_counting_policy().value(

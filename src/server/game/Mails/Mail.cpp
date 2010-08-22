@@ -18,7 +18,6 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "DatabaseEnv.h"
 #include "Mail.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
@@ -246,8 +245,6 @@ void WorldSession::HandleSendMail(WorldPacket & recv_data)
 
     MailDraft draft(subject, body);
 
-    SQLTransaction trans = CharacterDatabase.BeginTransaction();
-
     if (items_count > 0 || money > 0)
     {
         if (items_count > 0)
@@ -263,11 +260,12 @@ void WorldSession::HandleSendMail(WorldPacket & recv_data)
 
                 item->SetNotRefundable(GetPlayer()); // makes the item no longer refundable
                 pl->MoveItemFromInventory(items[i]->GetBagSlot(), item->GetSlot(), true);
-
-                item->DeleteFromInventoryDB(trans);     // deletes item from character's inventory
-                item->SaveToDB(trans);                  // recursive and not have transaction guard into self, item not in inventory and can be save standalone
+                CharacterDatabase.BeginTransaction();
+                item->DeleteFromInventoryDB();     // deletes item from character's inventory
+                item->SaveToDB();                  // recursive and not have transaction guard into self, item not in inventory and can be save standalone
                 // owner in data will set at mail receive and item extracting
-                trans->PAppend("UPDATE item_instance SET owner_guid = '%u' WHERE guid='%u'", GUID_LOPART(rc), item->GetGUIDLow());
+                CharacterDatabase.PExecute("UPDATE item_instance SET owner_guid = '%u' WHERE guid='%u'", GUID_LOPART(rc), item->GetGUIDLow());
+                CharacterDatabase.CommitTransaction();
                 draft.AddItem(item);
             }
 
@@ -289,10 +287,11 @@ void WorldSession::HandleSendMail(WorldPacket & recv_data)
     draft
         .AddMoney(money)
         .AddCOD(COD)
-        .SendMailTo(trans, MailReceiver(receive, GUID_LOPART(rc)), pl, body.empty() ? MAIL_CHECK_MASK_COPIED : MAIL_CHECK_MASK_HAS_BODY, deliver_delay);
+        .SendMailTo(MailReceiver(receive, GUID_LOPART(rc)), pl, body.empty() ? MAIL_CHECK_MASK_COPIED : MAIL_CHECK_MASK_HAS_BODY, deliver_delay);
 
-    pl->SaveInventoryAndGoldToDB(trans);
-    CharacterDatabase.CommitTransaction(trans);
+    CharacterDatabase.BeginTransaction();
+    pl->SaveInventoryAndGoldToDB();
+    CharacterDatabase.CommitTransaction();
 }
 
 //called when mail is read
@@ -367,10 +366,10 @@ void WorldSession::HandleMailReturnToSender(WorldPacket & recv_data)
     }
     //we can return mail now
     //so firstly delete the old one
-    SQLTransaction trans = CharacterDatabase.BeginTransaction();
-    trans->PAppend("DELETE FROM mail WHERE id = '%u'", mailId);             // needed?
-    trans->PAppend("DELETE FROM mail_items WHERE mail_id = '%u'", mailId);
-    CharacterDatabase.CommitTransaction(trans);
+    CharacterDatabase.BeginTransaction();
+    CharacterDatabase.PExecute("DELETE FROM mail WHERE id = '%u'", mailId);             // needed?
+    CharacterDatabase.PExecute("DELETE FROM mail_items WHERE mail_id = '%u'", mailId);
+    CharacterDatabase.CommitTransaction();
     pl->RemoveMail(mailId);
 
     // only return mail if the player exists (and delete if not existing)
@@ -437,7 +436,6 @@ void WorldSession::HandleMailTakeItem(WorldPacket & recv_data)
     uint8 msg = _player->CanStoreItem(NULL_BAG, NULL_SLOT, dest, it, false);
     if (msg == EQUIP_ERR_OK)
     {
-        SQLTransaction trans = CharacterDatabase.BeginTransaction();
         m->RemoveItem(itemId);
         m->removedItems.push_back(itemId);
 
@@ -475,7 +473,7 @@ void WorldSession::HandleMailTakeItem(WorldPacket & recv_data)
             {
                 MailDraft(m->subject, "")
                     .AddMoney(m->COD)
-                    .SendMailTo(trans, MailReceiver(receive, m->sender), MailSender(MAIL_NORMAL, m->receiver), MAIL_CHECK_MASK_COD_PAYMENT);
+                    .SendMailTo(MailReceiver(receive, m->sender), MailSender(MAIL_NORMAL, m->receiver), MAIL_CHECK_MASK_COD_PAYMENT);
             }
 
             pl->ModifyMoney(-int32(m->COD));
@@ -488,9 +486,10 @@ void WorldSession::HandleMailTakeItem(WorldPacket & recv_data)
         uint32 count = it->GetCount();                      // save counts before store and possible merge with deleting
         pl->MoveItemToInventory(dest,it,true);
 
-        pl->SaveInventoryAndGoldToDB(trans);
-        pl->_SaveMail(trans);
-        CharacterDatabase.CommitTransaction(trans);
+        CharacterDatabase.BeginTransaction();
+        pl->SaveInventoryAndGoldToDB();
+        pl->_SaveMail();
+        CharacterDatabase.CommitTransaction();
 
         pl->SendMailResult(mailId, MAIL_ITEM_TAKEN, MAIL_OK, 0, itemId, count);
     }
@@ -525,10 +524,10 @@ void WorldSession::HandleMailTakeMoney(WorldPacket & recv_data)
     pl->m_mailsUpdated = true;
 
     // save money and mail to prevent cheating
-    SQLTransaction trans = CharacterDatabase.BeginTransaction();
-    pl->SaveGoldToDB(trans);
-    pl->_SaveMail(trans);
-    CharacterDatabase.CommitTransaction(trans);
+    CharacterDatabase.BeginTransaction();
+    pl->SaveGoldToDB();
+    pl->_SaveMail();
+    CharacterDatabase.CommitTransaction();
 }
 
 //called when player lists his received mails
@@ -827,7 +826,7 @@ MailDraft& MailDraft::AddItem(Item* item)
     m_items[item->GetGUIDLow()] = item; return *this;
 }
 
-void MailDraft::prepareItems(Player* receiver, SQLTransaction& trans)
+void MailDraft::prepareItems(Player* receiver)
 {
     if (!m_mailTemplateId || !m_mailTemplateItemsNeed)
         return;
@@ -846,21 +845,21 @@ void MailDraft::prepareItems(Player* receiver, SQLTransaction& trans)
         {
             if (Item* item = Item::CreateItem(lootitem->itemid,lootitem->count,receiver))
             {
-                item->SaveToDB(trans);                           // save for prevent lost at next mail load, if send fail then item will deleted
+                item->SaveToDB();                           // save for prevent lost at next mail load, if send fail then item will deleted
                 AddItem(item);
             }
         }
     }
 }
 
-void MailDraft::deleteIncludedItems(SQLTransaction& trans, bool inDB /*= false*/ )
+void MailDraft::deleteIncludedItems(bool inDB /*= false*/)
 {
     for (MailItemMap::iterator mailItemIter = m_items.begin(); mailItemIter != m_items.end(); ++mailItemIter)
     {
         Item* item = mailItemIter->second;
 
         if (inDB)
-            trans->PAppend("DELETE FROM item_instance WHERE guid='%u'", item->GetGUIDLow());
+            CharacterDatabase.PExecute("DELETE FROM item_instance WHERE guid='%u'", item->GetGUIDLow());
 
         delete item;
     }
@@ -876,11 +875,9 @@ void MailDraft::SendReturnToSender(uint32 sender_acc, uint32 sender_guid, uint32
     if (!receiver)
         rc_account = sObjectMgr.GetPlayerAccountIdByGUID(MAKE_NEW_GUID(receiver_guid, 0, HIGHGUID_PLAYER));
 
-    SQLTransaction trans = CharacterDatabase.BeginTransaction();
-
     if (!receiver && !rc_account)                            // sender not exist
     {
-        deleteIncludedItems(trans, true);
+        deleteIncludedItems(true);
         return;
     }
 
@@ -893,29 +890,30 @@ void MailDraft::SendReturnToSender(uint32 sender_acc, uint32 sender_guid, uint32
         needItemDelay = sender_acc != rc_account;
 
         // set owner to new receiver (to prevent delete item with sender char deleting)
+        CharacterDatabase.BeginTransaction();
         for (MailItemMap::iterator mailItemIter = m_items.begin(); mailItemIter != m_items.end(); ++mailItemIter)
         {
             Item* item = mailItemIter->second;
-            item->SaveToDB(trans);                      // item not in inventory and can be save standalone
+            item->SaveToDB();                      // item not in inventory and can be save standalone
             // owner in data will set at mail receive and item extracting
-            trans->PAppend("UPDATE item_instance SET owner_guid = '%u' WHERE guid='%u'", receiver_guid, item->GetGUIDLow());
+            CharacterDatabase.PExecute("UPDATE item_instance SET owner_guid = '%u' WHERE guid='%u'", receiver_guid, item->GetGUIDLow());
         }
+        CharacterDatabase.CommitTransaction();
     }
 
     // If theres is an item, there is a one hour delivery delay.
     uint32 deliver_delay = needItemDelay ? sWorld.getConfig(CONFIG_MAIL_DELIVERY_DELAY) : 0;
 
     // will delete item or place to receiver mail list
-    SendMailTo(trans,MailReceiver(receiver,receiver_guid), MailSender(MAIL_NORMAL, sender_guid), MAIL_CHECK_MASK_RETURNED, deliver_delay);
-    CharacterDatabase.CommitTransaction(trans);
+    SendMailTo(MailReceiver(receiver,receiver_guid), MailSender(MAIL_NORMAL, sender_guid), MAIL_CHECK_MASK_RETURNED, deliver_delay);
 }
 
-void MailDraft::SendMailTo(SQLTransaction& trans, MailReceiver const& receiver, MailSender const& sender, MailCheckMask checked, uint32 deliver_delay)
+void MailDraft::SendMailTo(MailReceiver const& receiver, MailSender const& sender, MailCheckMask checked, uint32 deliver_delay)
 {
     Player* pReceiver = receiver.GetPlayer();               // can be NULL
 
     if (pReceiver)
-        prepareItems(pReceiver, trans);                            // generate mail template items
+        prepareItems(pReceiver);                            // generate mail template items
 
     uint32 mailId = sObjectMgr.GenerateMailID();
 
@@ -939,19 +937,20 @@ void MailDraft::SendMailTo(SQLTransaction& trans, MailReceiver const& receiver, 
     // Add to DB
     std::string safe_subject = GetSubject();
     std::string safe_body = GetBody();
-
+    CharacterDatabase.BeginTransaction();
     CharacterDatabase.escape_string(safe_subject);
     CharacterDatabase.escape_string(safe_body);
 
-    trans->PAppend("INSERT INTO mail (id,messageType,stationery,mailTemplateId,sender,receiver,subject,body,has_items,expire_time,deliver_time,money,cod,checked) "
+    CharacterDatabase.PExecute("INSERT INTO mail (id,messageType,stationery,mailTemplateId,sender,receiver,subject,body,has_items,expire_time,deliver_time,money,cod,checked) "
         "VALUES ('%u', '%u', '%u', '%u', '%u', '%u', '%s', '%s', '%u', '" UI64FMTD "','" UI64FMTD "', '%u', '%u', '%d')",
         mailId, sender.GetMailMessageType(), sender.GetStationery(), GetMailTemplateId(), sender.GetSenderId(), receiver.GetPlayerGUIDLow(), safe_subject.c_str(), safe_body.c_str(),(m_items.empty() ? 0 : 1), (uint64)expire_time, (uint64)deliver_time, m_money, m_COD, checked);
 
     for (MailItemMap::const_iterator mailItemIter = m_items.begin(); mailItemIter != m_items.end(); ++mailItemIter)
     {
         Item* item = mailItemIter->second;
-        trans->PAppend("INSERT INTO mail_items (mail_id,item_guid,item_template,receiver) VALUES ('%u', '%u', '%u','%u')", mailId, item->GetGUIDLow(), item->GetEntry(), receiver.GetPlayerGUIDLow());
+        CharacterDatabase.PExecute("INSERT INTO mail_items (mail_id,item_guid,item_template,receiver) VALUES ('%u', '%u', '%u','%u')", mailId, item->GetGUIDLow(), item->GetEntry(), receiver.GetPlayerGUIDLow());
     }
+    CharacterDatabase.CommitTransaction();
 
     // For online receiver update in game mail status and data
     if (pReceiver)
@@ -992,14 +991,8 @@ void MailDraft::SendMailTo(SQLTransaction& trans, MailReceiver const& receiver, 
             }
         }
         else if (!m_items.empty())
-        {
-            SQLTransaction temp = SQLTransaction(NULL);
-            deleteIncludedItems(temp);
-        }
+            deleteIncludedItems();
     }
     else if (!m_items.empty())
-    {
-        SQLTransaction temp = SQLTransaction(NULL);
-        deleteIncludedItems(temp);
-    }
+        deleteIncludedItems();
 }
