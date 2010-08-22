@@ -644,10 +644,10 @@ void GameObject::SaveToDB(uint32 mapid, uint8 spawnMask, uint32 phaseMask)
         << uint32(GetGoAnimProgress()) << ", "
         << uint32(GetGoState()) << ")";
 
-    WorldDatabase.BeginTransaction();
-    WorldDatabase.PExecute("DELETE FROM gameobject WHERE guid = '%u'", m_DBTableGuid);
-    WorldDatabase.PExecute(ss.str().c_str());
-    WorldDatabase.CommitTransaction();
+    SQLTransaction trans = WorldDatabase.BeginTransaction();
+    trans->PAppend("DELETE FROM gameobject WHERE guid = '%u'", m_DBTableGuid);
+    trans->Append(ss.str().c_str());
+    WorldDatabase.CommitTransaction(trans);
 }
 
 bool GameObject::LoadFromDB(uint32 guid, Map *map)
@@ -1239,7 +1239,7 @@ void GameObject::Use(Unit* user)
 
                     int32 roll = irand(1,100);
 
-                    DEBUG_LOG("Fishing check (skill: %i zone min skill: %i chance %i roll: %i",skill,zone_skill,chance,roll);
+                    sLog.outStaticDebug("Fishing check (skill: %i zone min skill: %i chance %i roll: %i",skill,zone_skill,chance,roll);
 
                     // but you will likely cause junk in areas that require a high fishing skill (not yet implemented)
                     if (chance >= roll)

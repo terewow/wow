@@ -16,8 +16,12 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include <mysql.h>
+
 #include "Common.h"
+
+#include <mysql.h>
+
+#include "DatabaseEnv.h"
 #include "QueryResult.h"
 #include "SQLOperation.h"
 #include "MySQLConnection.h"
@@ -27,6 +31,8 @@
 #include "Timer.h"
 
 MySQLConnection::MySQLConnection() :
+m_queue(NULL),
+m_worker(NULL),
 m_Mysql(NULL)
 {
 }

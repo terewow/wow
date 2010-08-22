@@ -374,10 +374,11 @@ pAuraEffectHandler AuraEffectHandler[TOTAL_AURAS]=
     &AuraEffect::HandleNoImmediateEffect,                         //316 SPELL_AURA_PERIODIC_HASTE implemented in AuraEffect::CalculatePeriodic
 };
 
-AuraEffect::AuraEffect(Aura * base, uint8 effIndex, int32 *baseAmount, Unit * caster) :
-    m_base(base), m_spellProto(base->GetSpellProto()), m_spellmod(NULL), m_periodicTimer(0),
-    m_tickNumber(0), m_effIndex(effIndex), m_isPeriodic(false), m_canBeRecalculated(true),
-    m_baseAmount (baseAmount ? *baseAmount : m_spellProto->EffectBasePoints[m_effIndex])
+AuraEffect::AuraEffect(Aura * base, uint8 effIndex, int32 *baseAmount, Unit * caster):
+m_base(base), m_spellProto(base->GetSpellProto()), m_effIndex(effIndex),
+m_baseAmount(baseAmount ? *baseAmount : m_spellProto->EffectBasePoints[m_effIndex]),
+m_canBeRecalculated(true), m_spellmod(NULL), m_isPeriodic(false), 
+m_periodicTimer(0), m_tickNumber(0)
 {
     CalculatePeriodic(caster, true);
 
@@ -541,6 +542,8 @@ int32 AuraEffect::CalculateAmount(Unit * caster)
                         // 0.75 from sp bonus
                         DoneActualBenefit = caster->SpellBaseHealingBonus(GetSpellSchoolMask(m_spellProto)) * 0.75f;
                     }
+                    break;
+                default:
                     break;
             }
             break;
@@ -726,6 +729,9 @@ int32 AuraEffect::CalculateAmount(Unit * caster)
             // Dash - do not set speed if not in cat form
             if (GetSpellProto()->SpellFamilyName == SPELLFAMILY_DRUID && GetSpellProto()->SpellFamilyFlags[2] & 0x00000008)
                 amount = GetBase()->GetUnitOwner()->m_form == FORM_CAT ? amount : 0;
+            break;
+        default:
+            break;
     }
     if (DoneActualBenefit != 0.0f)
     {
@@ -777,6 +783,8 @@ void AuraEffect::CalculatePeriodic(Unit * caster, bool create)
                 m_amplitude = irand (0, 60) + 30;
                 m_amplitude *= IN_MILLISECONDS;
             }
+            break;
+        default:
             break;
     }
 
@@ -859,6 +867,8 @@ void AuraEffect::CalculateSpellMod()
                         break;
                     }
                     break;
+                default:
+                    break;
             }
         case SPELL_AURA_PROC_TRIGGER_SPELL:
             switch(GetId())
@@ -876,6 +886,8 @@ void AuraEffect::CalculateSpellMod()
                     }
                     m_spellmod->value = GetBase()->GetUnitOwner()->CalculateSpellDamage(GetBase()->GetUnitOwner(), GetSpellProto(), 1);
                     break;
+                default:
+                    break;
             }
             break;
         case SPELL_AURA_ADD_FLAT_MODIFIER:
@@ -892,6 +904,8 @@ void AuraEffect::CalculateSpellMod()
                 m_spellmod->charges = GetBase()->GetCharges();
             }
             m_spellmod->value = GetAmount();
+            break;
+        default:
             break;
     }
 }
@@ -1044,6 +1058,8 @@ void AuraEffect::UpdatePeriodic(Unit * caster)
                     if (m_tickNumber % 11 == 0)
                         SetAmount(GetAmount() * 2);
                     break;
+                default:
+                    break;
             }
             break;
         case SPELL_AURA_DUMMY:
@@ -1149,6 +1165,18 @@ void AuraEffect::UpdatePeriodic(Unit * caster)
                         case 59911: // Tenacity (vehicle)
                            GetBase()->RefreshDuration();
                            break;
+                        case 66823: case 67618: case 67619: case 67620: // Paralytic Toxin
+                            // Get 0 effect aura
+                            if (AuraEffect *slow = GetBase()->GetEffect(0))
+                            {
+                                int32 newAmount = slow->GetAmount() - 10;
+                                if (newAmount < -100)
+                                    newAmount = -100;
+                                slow->ChangeAmount(newAmount);
+                            }
+                            break;
+                        default:
+                            break;
                     }
                     break;
                 case SPELLFAMILY_MAGE:
@@ -1169,7 +1197,12 @@ void AuraEffect::UpdatePeriodic(Unit * caster)
                         }
                         return;
                     }
+                    break;
+                default:
+                    break;
            }
+       default:
+           break;
     }
 }
 
@@ -1795,6 +1828,8 @@ void AuraEffect::PeriodicTick(Unit * target, Unit * caster) const
         case SPELL_AURA_PERIODIC_TRIGGER_SPELL_WITH_VALUE:
             TriggerSpellWithValue(target, caster);
             break;
+        default:
+            break;
     }
 }
 
@@ -1882,6 +1917,14 @@ void AuraEffect::PeriodicDummyTick(Unit * target, Unit * caster) const
                     target->CastSpell(target, 64774, true, NULL, NULL, GetCasterGUID());
                     target->RemoveAura(64821);
                 }
+                break;
+            case 66118: // Leeching Swarm (Anub'arak)
+                int32 lifeLeeched = target->GetHealth() * GetAmount() / 100;
+                if (lifeLeeched < 250) lifeLeeched = 250;
+                // Damage
+                caster->CastCustomSpell(target, 66240, &lifeLeeched, 0, 0, false);
+                // Heal
+                caster->CastCustomSpell(caster, 66125, &lifeLeeched, 0, 0, false);
                 break;
         }
         break;
@@ -2056,6 +2099,8 @@ void AuraEffect::PeriodicDummyTick(Unit * target, Unit * caster) const
                 target->ToPlayer()->RemoveRunesByAuraEffect(this);
             }
             break;
+        default:
+            break;
     }
 }
 
@@ -2219,6 +2264,14 @@ void AuraEffect::TriggerSpell(Unit * target, Unit * caster) const
                     case 39857: triggerSpellId = 39856; break;
                     // Personalized Weather
                     case 46736: triggerSpellId = 46737; break;
+                    // Mana Barrier - Lady Deathwhisper
+                    case 70842:
+                    {
+                        int32 missingHealth = caster->GetMaxHealth() - caster->GetHealth();
+                        caster->ModifyHealth(missingHealth);
+                        caster->ModifyPower(POWER_MANA, -missingHealth);
+                        return;
+                    }
                 }
                 break;
             }
@@ -2299,6 +2352,8 @@ void AuraEffect::TriggerSpell(Unit * target, Unit * caster) const
                 }
                 break;
             }
+            default:
+                break;
         }
 
         // Reget trigger spell proto
@@ -2309,6 +2364,17 @@ void AuraEffect::TriggerSpell(Unit * target, Unit * caster) const
         // Spell exist but require custom code
         switch(auraId)
         {
+            case 66869:
+                switch(caster->GetMap()->GetDifficulty())
+                {
+                    case RAID_DIFFICULTY_10MAN_NORMAL: triggerSpellId = 66870; break;
+                    case RAID_DIFFICULTY_10MAN_HEROIC: triggerSpellId = 67621; break;
+                    case RAID_DIFFICULTY_25MAN_NORMAL: triggerSpellId = 67622; break;
+                    case RAID_DIFFICULTY_25MAN_HEROIC: triggerSpellId = 67623; break;
+                }
+                // Reget trigger spell proto
+                triggeredSpellInfo = sSpellStore.LookupEntry(triggerSpellId);
+                break;
             // Mana Tide
             case 16191:
             {
@@ -2322,6 +2388,8 @@ void AuraEffect::TriggerSpell(Unit * target, Unit * caster) const
             // Poison (Grobbulus)
             case 28158:
             case 54362:
+            // Slime Pool (Dreadscale & Acidmaw)
+            case 66882:
                 target->CastCustomSpell(triggerSpellId, SPELLVALUE_RADIUS_MOD, (int32)((((float)m_tickNumber / 60) * 0.9f + 0.1f) * 10000), NULL, true, NULL, this);
                 return;
             // Beacon of Light
@@ -2472,6 +2540,8 @@ void AuraEffect::HandleShapeshiftBoosts(Unit * target, bool apply) const
         case FORM_STEALTH:
         case FORM_CREATURECAT:
         case FORM_CREATUREBEAR:
+            break;
+        default:
             break;
     }
 

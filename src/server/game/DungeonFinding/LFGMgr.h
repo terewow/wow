@@ -20,7 +20,7 @@
 #define _LFGMGR_H
 
 #include "Common.h"
-#include "ace/Singleton.h"
+#include <ace/Singleton.h>
 #include "Group.h"
 #include "LFG.h"
 
@@ -237,7 +237,7 @@ typedef std::map<uint32, LfgProposalPlayer*> LfgProposalPlayerMap;
 // Stores all Dungeon Proposal after matching candidates
 struct LfgProposal
 {
-    LfgProposal(uint32 dungeon): state(LFG_PROPOSAL_INITIATING), groupLowGuid(0), dungeonId(dungeon), leaderLowGuid(0) {}
+    LfgProposal(uint32 dungeon): dungeonId(dungeon), state(LFG_PROPOSAL_INITIATING), groupLowGuid(0), leaderLowGuid(0) {}
 
     ~LfgProposal()
     {

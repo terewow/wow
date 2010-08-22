@@ -24,7 +24,7 @@
 #include "Common.h"
 #include "SharedDefines.h"
 #include "Define.h"
-#include "ace/Singleton.h"
+#include <ace/Singleton.h>
 
 #define max_ge_check_delay DAY  // 1 day in seconds
 
@@ -55,7 +55,7 @@ struct GameEventQuestToEventConditionNum
 
 struct GameEventData
 {
-    GameEventData() : start(1),end(0),nextstart(0),occurence(0),length(0),state(GAMEEVENT_NORMAL), holiday_id(HOLIDAY_NONE) {}
+    GameEventData() : start(1), end(0), nextstart(0), occurence(0), length(0), holiday_id(HOLIDAY_NONE), state(GAMEEVENT_NORMAL) {}
     time_t start;           // occurs after this time
     time_t end;             // occurs before this time
     time_t nextstart;       // after this time the follow-up events count this phase completed
